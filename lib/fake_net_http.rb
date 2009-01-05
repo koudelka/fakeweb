@@ -22,6 +22,10 @@ module Net  #:nodoc: all
 
 
   class HTTP
+
+    LIBRARY_IDENTIFIER = :net_http
+    FakeWeb.register_client_library(LIBRARY_IDENTIFIER)
+
     def self.socket_type
       FakeWeb::SocketDelegator
     end
@@ -40,7 +44,7 @@ module Net  #:nodoc: all
 
       if FakeWeb.registered_uri?(method, uri)
         @socket = Net::HTTP.socket_type.new
-        FakeWeb.response_for(method, uri, &block)
+        FakeWeb.response_for(method, LIBRARY_IDENTIFIER, uri, &block)
       elsif FakeWeb.allow_net_connect?
         original_net_http_connect
         original_net_http_request(request, body, &block)
@@ -54,4 +58,10 @@ module Net  #:nodoc: all
     end
   end
 
+  # A uniform way to get fake content, for testing.
+  class HTTPResponse
+    def get_content
+      self.body
+    end
+  end
 end

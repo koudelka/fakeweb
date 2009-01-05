@@ -1,4 +1,12 @@
+module FakeWeb
+  CLIENT_LIBRARIES = []
+  def self.register_client_library(library_identifier)
+    CLIENT_LIBRARIES << library_identifier
+  end
+end
+
 require 'fake_net_http'
+require 'fake_httpclient'
 require 'singleton'
 
 module OpenURI #:nodoc: all
@@ -6,6 +14,7 @@ module OpenURI #:nodoc: all
 end
 
 module FakeWeb
+
 
   # Resets the FakeWeb Registry. This will force all subsequent web requests to
   # behave as real requests.
@@ -115,18 +124,21 @@ module FakeWeb
   end
 
   # call-seq:
-  #   FakeWeb.response_for(method, uri)
-  #   FakeWeb.response_for(uri)
+  #   FakeWeb.response_for(method, uri, client_library)
+  #   FakeWeb.response_for(uri, client_library)
   #
-  # Returns the faked Net::HTTPResponse object associated with +uri+.
+  # When using Net::HTTP
+  #   Returns the faked Net::HTTPResponse object associated with +uri+.
+  # When using HTTPClient
+  #   Returns the faked HTTP::Message object associated with +uri+.
   def self.response_for(*args, &block) #:nodoc: :yields: response
     method = :any
     case args.length
-    when 2 then method, uri = *args
-    when 1 then         uri = *args
+    when 3 then method, client_library, uri = *args
+    when 2 then         client_library, uri = *args
     else   raise ArgumentError.new("wrong number of arguments (#{args.length} for method = :any, uri)")
     end
-    Registry.instance.response_for(method, uri, &block)
+    Registry.instance.response_for(method, uri, client_library, &block)
   end
 
   # call-seq:
@@ -182,7 +194,7 @@ module FakeWeb
       end
     end
 
-    def response_for(method, uri, &block)
+    def response_for(method, uri, client_library, &block)
       responses = registered_uri(method, uri)
       return nil if responses.nil?
 
@@ -195,7 +207,7 @@ module FakeWeb
         end
       }
 
-      return next_response.response(&block)
+      return next_response.response(client_library, &block)
     end
 
     private
@@ -235,16 +247,24 @@ module FakeWeb
       self.times = times ? times : 1
     end
 
-    def response(&block)
+    def response(client_library, &block)
       if has_baked_response?
         response = baked_response
       else
-        code, msg = meta_information
-        response = Net::HTTPResponse.send(:response_class, code.to_s).new(uri, code.to_s, msg)
-        response.instance_variable_set(:@body, content)
+        case client_library
+          when :net_http
+            code, msg = meta_information
+            response = Net::HTTPResponse.send(:response_class, code.to_s).new(uri, code.to_s, msg)
+            response.instance_variable_set(:@body, content)
+          when :httpclient
+            response = HTTP::Message.new_response(content)
+        end
       end
-      response.instance_variable_set(:@read, true)
-      response.extend FakeWeb::Response
+      case client_library
+        when :net_http
+          response.instance_variable_set(:@read, true)
+          response.extend FakeWeb::Response
+      end
 
       optionally_raise(response)
 

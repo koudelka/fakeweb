@@ -35,7 +35,7 @@ class TestFakeWeb < Test::Unit::TestCase
       FakeWeb.response_for
     end
     assert_raises ArgumentError do
-      FakeWeb.response_for(:get, "http://example.com", "/example")
+      FakeWeb.response_for(:get, :some_client_lib, "http://example.com", "/example")
     end
   end
 
@@ -97,7 +97,9 @@ class TestFakeWeb < Test::Unit::TestCase
 
   def test_response_for_with_registered_uri
     FakeWeb.register_uri('http://mock/test_example.txt', :file => File.dirname(__FILE__) + '/fixtures/test_example.txt')
-    assert_equal 'test example content', FakeWeb.response_for('http://mock/test_example.txt').body
+    FakeWeb::CLIENT_LIBRARIES.each { |library_identifier|
+      assert_equal 'test example content', FakeWeb.response_for(library_identifier, 'http://mock/test_example.txt').get_content
+    }
   end
 
   def test_response_for_with_unknown_uri
@@ -106,13 +108,17 @@ class TestFakeWeb < Test::Unit::TestCase
 
   def test_response_for_with_put_method
     FakeWeb.register_uri(:put, "http://example.com", :string => "response")
-    assert_equal 'response', FakeWeb.response_for(:put, "http://example.com").body
+    FakeWeb::CLIENT_LIBRARIES.each { |library_identifier|
+      assert_equal 'response', FakeWeb.response_for(:put, library_identifier, "http://example.com").get_content
+    }
   end
 
   def test_response_for_with_any_method_explicitly
     FakeWeb.register_uri(:any, "http://example.com", :string => "response")
-    assert_equal 'response', FakeWeb.response_for(:get, "http://example.com").body
-    assert_equal 'response', FakeWeb.response_for(:any, "http://example.com").body
+    FakeWeb::CLIENT_LIBRARIES.each { |library_identifier|
+      assert_equal 'response', FakeWeb.response_for(:get, library_identifier, "http://example.com").get_content
+      assert_equal 'response', FakeWeb.response_for(:any, library_identifier, "http://example.com").get_content
+    }
   end
 
   def test_content_for_registered_uri_with_port_and_request_with_port
